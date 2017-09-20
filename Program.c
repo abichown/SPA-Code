@@ -44,9 +44,9 @@
 /************************************************************************************************************/
 
 /*Variables to change */
-int rows = 57; /* NUMBER OF PROJECTS */
-int cols = 20; /* NUMBER OF PAIRS (some might be singletons) */
-#define cols 20
+int rows = 58; /* NUMBER OF PROJECTS */
+int cols = 19; /* NUMBER OF PAIRS (some might be singletons) */
+#define cols 19
 int numLec = 27; /* NUMBER OF LECTURERS */
 char fileName1[] = "StudentExample.csv"; /* This file has the data to fill choices - is passed into readChoices */
 char fileName2[] = "SupervisorExample.csv"; /* This file has the data to fill in supConstraint - is passed into readLecturers */
