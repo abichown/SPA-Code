@@ -118,7 +118,7 @@ int main() {
 	}
 	fprintf(finalConfig, "Final energy: %f\n", energy(projPref) );
 	fclose(finalConfig);
-	
+	fclose(saveData)
 
 	return 0;
 }
