@@ -284,7 +284,7 @@ int countViolations( int projNum[], float supConstraint[rows][numLec] ) {
 	int k;
 	count += projClashFullCount(projNum);
 	for ( k=0; k<cols; k++ ) {
-		count +=countSupConstraintClashes( supConstraint, projNum, k );
+		count +=countSupConstraintClashes( supConstraint, projNum, projNum[k] );
 	}
 
 	return count;
