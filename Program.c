@@ -73,7 +73,7 @@ void readLecturers( float supConstraint[rows][numLec] ); /* reads in the lecture
 int countViolations( int projNum[],float supConstraint[rows][numLec] ); /* counts violations of constraints */
 int countSupConstraintClashes( float supConstraint[rows][numLec], int projNum[], int proj); /*counts violations of lectuere constraint */
 void createInitialConfiguration( int choices[rows][cols], int projNum[cols], int projPref[cols], int changes[], float supConstraint[rows][numLec] ); /* does what it says */
-void cycleOfMoves( int choices[rows][cols], int projNum[cols], int projPref[cols], int changes[], float supConstraint[rows][numLec], FILE* saveData ); /* Does all the moves for a fixed temp.*/
+void cycleOfMoves( int choices[rows][cols], int projNum[cols], int projPref[cols], int changes1[], int changes2[], float supConstraint[rows][numLec], FILE* saveData ); /* Does all the moves for a fixed temp.*/
 void init_vector_random_generator(int ,int);
 void vector_random_generator(int, double *);
 /* end of function initialisations */
@@ -82,10 +82,11 @@ int main() {
 
 	int choices[rows][cols]; /* This has the choices the pair made in. We import it from csv file. */
 	float supConstraint[rows][numLec]; /* This has all the data needed for calculating supervisor constraints in - including which projects a supervisor has and how many they can supervise. Imported from csv file */
-	int i,j; 
+	int i,j;
 	int projNum[cols]; /* for each pair, stores what number project they are currently assigned */
 	int projPref[cols]; /* for each pair, stores what preference their currently assigned project is. NOTE the preference stored here is not zero-indexed. */
-	int changes[3]; /* 0 is PAIR, 1 is PROJECT, 2 is PREF */	
+	int changes1[3]; /* 0 is PAIR, 1 is PROJECT, 2 is PREF */	
+	int changes2[3];
 	
 	FILE *finalConfig; /* this file saves the final configuration - which pair have what project */
 	FILE *saveData;
@@ -96,22 +97,29 @@ int main() {
 	readChoices( choices);
 	readLecturers( supConstraint );
 	
-	createInitialConfiguration( choices, projNum, projPref, changes, supConstraint );
+
+	
+	createInitialConfiguration( choices, projNum, projPref, changes1, supConstraint );
+	
 	/* We have a starting configuration WITH NO VIOLATIONS. */
 	saveData = fopen("newData.txt", "w");
-	
+		
 	/* Simulated Annealing time 
 	   So, we stay at one temperature until either 1000*cols moves or 100*cols Succesful Moves. 
 	   Then decrease and go again.	
 	*/
+	
 	while ( temp >= 0 ) {
-		cycleOfMoves( choices, projNum, projPref, changes, supConstraint, saveData );
+		cycleOfMoves( choices, projNum, projPref, changes1, changes2, supConstraint, saveData );
 		/* decrease temp */
 		temp=temp-0.001;
 	}
 	
 	printf("Final energy is %f\n", energy(projPref));
+	
+	
 	finalConfig = fopen("finalConfig.txt", "a");	
+	
 	/* print final configuration to file */
 	for (i=0; i<cols; i++) {
 		fprintf(finalConfig, "%d,%d,%d\n", i+1, projNum[i]+1, projPref[i]);
@@ -123,65 +131,130 @@ int main() {
 	return 0;
 }
 
-void cycleOfMoves( int choices[rows][cols], int projNum[cols], int projPref[cols], int changes[], float supConstraint[rows][numLec], FILE* saveData ) {
+void cycleOfMoves( int choices[rows][cols], int projNum[cols], int projPref[cols], int changes1[], int changes2[], float supConstraint[rows][numLec], FILE* saveData ) {
 	int successfulmoves = 0;
 	int moves = 0;
 	int same = 0;
 	float trialEnergy, currentEnergy;
 	float changeEnergy, ratioEnergy;
-	int lecClashes;
+	int lecClashes1;
+	int lecClashes2;
 	
 	generateRandomNumbers(); 
+	
 	currentEnergy = energy( projPref );
+	
 	printf("Temperature %f\nCurrent Energy = %f\n\n", temp,currentEnergy);
+	
 	while ( moves < ( 1000 * cols ) && successfulmoves < ( 100 * cols ) ) { 
+		/* increment counters */
 		moves++;
 		successfulmoves++; 
-		/* change the allocation here */
-		changeAllocationByPref( choices, projNum, projPref, changes );
-
+		
+		/* change the allocations */
+		changeAllocationByPref( choices, projNum, projPref, changes1 );
+		changeAllocationByPref( choices, projNum, projPref, changes2 );
+		
 		//printf(" weight 1: %f, weight 2: %f, weight 3: %f, weight 4: %f\n", weight1, weight2, weight3, weight4);
-		trialEnergy = energy( projPref ); /* energy of our new allocation */
+		
+		/* energy of new allocation */
+		trialEnergy = energy( projPref ); 
+		
 		//printf("current energy and trial energy, %d, %d\n", currentEnergy, trialEnergy);
+		
 		changeEnergy = (float)( trialEnergy - currentEnergy ); 
 		ratioEnergy = fabs( (float)trialEnergy / (float)currentEnergy ); /*need to be floats for things to work */
-
+		
 		vector_random_generator(1,rands);
 		
-		lecClashes=countSupConstraintClashes( supConstraint, projNum, projNum[changes[0]] ); /* projNum[changes[0]] != changes[1] at this point. The former is current proj, the latter old proj */		
-
-		if ( projClashFullCount( projNum ) > 0 ) { /* Reject configuration due to clash - revert changes and reduce succesful move counter */
-			projNum[changes[0]] = changes[1];
-			projPref[changes[0]] = changes[2];
-
+		/* Check violations */
+		lecClashes1 = countSupConstraintClashes( supConstraint, projNum, projNum[changes1[0]] ); /* projNum[changes[0]] != changes[1] at this point. The former is current proj, the latter old proj */		
+		lecClashes2 = countSupConstraintClashes( supConstraint, projNum, projNum[changes2[0]] );
+				
+		if ( projClashFullCount( projNum ) > 0 ) { 
+			/* Reject configuration due to clash - revert changes and reduce succesful move counter */
+			
+			//Revert project 1
+			projNum[changes1[0]] = changes1[1];
+			projPref[changes1[0]] = changes1[2];
+			
+			//Revert project 2
+			if (changes1[0] != changes2[0]) {
+				// If it's moved the same pair twice, doing this will undo the second move but redo the first move, effectively.
+				projNum[changes2[0]] = changes2[1];
+				projPref[changes2[0]] = changes2[2];
+			}
+			//Don't count this one as succesful
 			successfulmoves--;
-		//	printf("ttttttttttttttthere was a clash\n");
-		} else if (temp > 0 && rands[0] > exp( -changeEnergy / temp ) ) { /* Reject configuration due to energy - revert changes */
-			projNum[changes[0]] = changes[1];
-			projPref[changes[0]] = changes[2];
+			
+			//	printf("ttttttttttttttthere was a clash\n");
+			
+		} else if (temp > 0 && rands[0] > exp( -changeEnergy / temp ) ) { 
+			/* Reject configuration due to energy - revert changes */
+						
+			//Revert project 1
+			projNum[changes1[0]] = changes1[1];
+			projPref[changes1[0]] = changes1[2];
+			
+			//Revert project 2
+			if (changes1[0] != changes2[0]) {
+				// If it's moved the same pair twice, doing this will undo the second move but redo the first move, effectively.
+				projNum[changes2[0]] = changes2[1];
+				projPref[changes2[0]] = changes2[2];
+			}
+			
+			//Don't count this one as succesful
 			successfulmoves--;
-		//	printf("reject due to energy\n");
+			
+			//	printf("reject due to energy\n");
 
-		} else if ( temp == 0 && trialEnergy > currentEnergy){ /* Reject due to energy in T=0 case */
-
-			projNum[changes[0]] = changes[1];
-			projPref[changes[0]] = changes[2];
+		} else if ( temp == 0 && trialEnergy > currentEnergy){ 
+			/* Reject due to energy in T=0 case */
+								
+			//Revert project 1
+			projNum[changes1[0]] = changes1[1];
+			projPref[changes1[0]] = changes1[2];
+			
+			//Revert project 2
+			if (changes1[0] != changes2[0]) {
+				// If it's moved the same pair twice, doing this will undo the second move but redo the first move, effectively.
+				projNum[changes2[0]] = changes2[1];
+				projPref[changes2[0]] = changes2[2];
+			}
+			
+			//Don't count this one as succesful
 			successfulmoves--;
-		//	printf("reject due to energy\n");
-		} else if ( lecClashes>0 ) { /* reject due to lecturer constraint violation */
-			projNum[changes[0]] = changes[1];
-			projPref[changes[0]] = changes[2];
+			
+			//	printf("reject due to energy\n");
+			
+		} else if ( lecClashes1>0 || lecClashes2 > 0 ) { 
+			/* reject due to lecturer constraint violation */
+							
+			//Revert project 1
+			projNum[changes1[0]] = changes1[1];
+			projPref[changes1[0]] = changes1[2];
+			
+			//Revert project 2
+			if (changes1[0] != changes2[0]) {
+				// If it's moved the same pair twice, doing this will undo the second move but redo the first move, effectively.
+				projNum[changes2[0]] = changes2[1];
+				projPref[changes2[0]] = changes2[2];
+			}
+			
+			//Don't count this one as succesful
 			successfulmoves--;
-		//	printf("reject due to lecturers\n");
+			
+			//	printf("reject due to lecturers\n");
 		}
 			
-		if ( currentEnergy == trialEnergy ) { /* This is (in theory) impossible. We count because as its a nice tracker for if things are broken. */
-			//printf("This shouldn't be happening?\n\n");
-			same++;
-			successfulmoves--;
-		}	
+		/* This is now possible in the dual switching version, so little need to count them, but in case its of interest just comment back in. */
+		//if ( currentEnergy == trialEnergy ) { 
+		//	same++; 
+		// printf("Same energy move\n");
+		//}	
 		
 		currentEnergy = energy( projPref );
+		
 		//fprintf(saveData, "%d ", currentEnergy);
 		//fprintf(saveData, "\n");
 				
@@ -216,6 +289,7 @@ float energy( int projPref[] ) {
 /* Counts how many clashes there are in the allocation. RETURNS this. If 0, no clashes. */
 int projClashFullCount ( int projNum[] ){
 	int i, j, count = 0;
+	
 	for ( i = 0; i < cols; i++) {
 		for ( j = i; j < cols; j++) {
 			if ( i != j ) {
@@ -225,6 +299,7 @@ int projClashFullCount ( int projNum[] ){
 			}
 		}
 	}
+	
 	return count;
 }
 
@@ -263,10 +338,12 @@ void changeAllocationByPref( int choices[rows][cols], int projNum[cols], int pro
 			go = 1;
 		}
 	}
+	
 	changes[0] = pair;
 	changes[1] = projNum[pair];
 	changes[2] = projPref[pair]; /* = choices[changes[1]][changes[0]] = choices[projNum[pair]][pair]*/
 	//printf("Energy before reallocation is %d\n", energy(projPref));
+	
 	/* make the change */
 	for( j=0; j<rows; j++){
 		if( choices[j][pair] == pref+1 ) {
@@ -274,6 +351,7 @@ void changeAllocationByPref( int choices[rows][cols], int projNum[cols], int pro
 			projPref[pair] = pref+1;
 		}
 	}
+	
 	//printf("Energy after reallocation is %d\n", energy(projPref));
 
 }
@@ -478,4 +556,3 @@ void readLecturers( float supConstraint[rows][numLec] ) {
 	fclose(data);
 	
 }	
-	
