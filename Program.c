@@ -13,7 +13,7 @@
 /*           leave that cell empty.  */
 /*           Make sure the file is a CSV file. There is a Excel error where leaving the top / bottom row    */
 /*           empty can cause Excel to leave it out when saving the file as a CSV. This can be               */
-/*           avoided with a dummy column of letters. See example file "Example of working around Excel error.csv"     */
+/*           avoided with a dummy column of letters. See example file "StudentExample.csv"     */
 /*                                                                                                          */
 /*      * fileName2 is the file with the supervisor constraints in.                                         */
 /* 	     Each project has a row, and each supervisor a column. For each project a supervisor            */
